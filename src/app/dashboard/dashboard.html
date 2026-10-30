@@ -1,0 +1,160 @@
+<div class="chat-app" [class.sidebar-closed]="!sidebarOpen()">
+  <aside class="sidebar" aria-label="Chat navigation">
+    <div class="sidebar-header">
+      <a class="brand" routerLink="/">
+        <span class="brand-icon" aria-hidden="true">@</span>
+        <span>{{ selectedModelTitle() }}</span>
+      </a>
+      <button class="icon-button mobile-toggle" type="button" (click)="toggleSidebar()" aria-label="Close sidebar">×</button>
+    </div>
+
+    <button class="new-chat" type="button" (click)="startNewChat()">
+      <span aria-hidden="true">＋</span>
+      <span>New chat</span>
+      <span class="shortcut">Ctrl O</span>
+    </button>
+
+    <nav class="main-nav">
+      <button type="button" class="nav-item"><span aria-hidden="true">▧</span> Images</button>
+      <button type="button" class="nav-item"><span aria-hidden="true">▤</span> Documents</button>
+      <button type="button" class="nav-item"><span aria-hidden="true">›</span> Apps</button>
+      <button type="button" class="nav-item"><span aria-hidden="true">▱</span> Projects</button>
+      <button type="button" class="nav-item"><span aria-hidden="true">⌕</span> Search chat</button>
+    </nav>
+
+    @if (messages().length > 0) {
+      <div class="recent">
+        <p>Recent</p>
+        <button type="button" (click)="startNewChat()">Current conversation</button>
+      </div>
+    }
+
+    <button class="profile-button" type="button">
+      <span class="avatar">SK</span>
+      <span>Sanjay Kumar</span>
+      <span class="profile-more" aria-hidden="true">···</span>
+    </button>
+  </aside>
+
+  <button
+    class="sidebar-backdrop"
+    type="button"
+    aria-label="Close sidebar"
+    (click)="toggleSidebar()"
+  ></button>
+
+  <main class="main-panel">
+    <div hidden>
+      <ng-container [ngComponentOutlet]="selectedModelComponent()"></ng-container>
+    </div>
+
+    <header class="topbar">
+      <button class="icon-button sidebar-toggle" type="button" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+        <span aria-hidden="true">☰</span>
+      </button>
+      <div class="topbar-actions">
+        <button class="pro-button" type="button"><span aria-hidden="true">◇</span> Go Pro</button>
+        <button class="icon-button" type="button" aria-label="Notifications">♧</button>
+      </div>
+    </header>
+
+    <section class="conversation-area">
+      @if (messages().length === 0) {
+        <div class="welcome">
+          <h1>Good to see you.</h1>
+          <form class="composer" (submit)="submitPrompt($event)">
+            <textarea
+              #promptInput
+              [value]="prompt()"
+              (input)="updatePrompt($event)"
+              (keydown)="handleKeydown($event)"
+              placeholder="Ask anything..."
+              aria-label="Message assistant"
+              rows="2"
+            ></textarea>
+            <div class="composer-actions">
+              <button class="icon-button attach-button" type="button" aria-label="Attach a file">＋</button>
+              <div class="composer-right">
+                <label class="model-select">
+                  <span class="model-icon" aria-hidden="true">✳</span>
+                  <select aria-label="Choose AI model" [value]="selectedModelId()" (change)="selectModel($event)">
+                    @for (model of models; track model.id) {
+                      <option [value]="model.id">{{ model.title }}</option>
+                    }
+                  </select>
+                </label>
+                <button class="icon-button mic-button" type="button" aria-label="Voice input">♩</button>
+                <button class="send-button" type="submit" [disabled]="!prompt().trim()" aria-label="Send message">↑</button>
+              </div>
+            </div>
+          </form>
+
+          <div class="suggestions" aria-label="Suggested prompts">
+            @for (suggestion of suggestions; track suggestion.title) {
+              <button class="suggestion" type="button" (click)="useSuggestion(suggestion.prompt)">
+                <span aria-hidden="true">{{ suggestion.icon }}</span>
+                {{ suggestion.title }}
+              </button>
+            }
+          </div>
+        </div>
+      } @else {
+        <div class="message-list" aria-live="polite">
+          @for (message of messages(); track $index) {
+            <article class="message" [class.user-message]="message.role === 'user'">
+              @if (message.role === 'assistant') {
+                <span class="assistant-icon" aria-hidden="true">✳</span>
+              }
+              <div>
+                <span class="message-author">{{ message.role === 'user' ? 'You' : message.modelTitle }}</span>
+                <p>{{ message.text }}</p>
+              </div>
+            </article>
+          }
+          @if (isLoading()) {
+            <article class="message assistant-pending" role="status" aria-label="Assistant is responding">
+              <span class="assistant-icon" aria-hidden="true">✳</span>
+              <div>
+                <span class="message-author">{{ selectedModelTitle() }}</span>
+                <span class="typing-indicator" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    @if (messages().length > 0) {
+      <footer class="conversation-composer">
+        <form class="composer" (submit)="submitPrompt($event)">
+          <textarea
+            [value]="prompt()"
+            (input)="updatePrompt($event)"
+            (keydown)="handleKeydown($event)"
+            placeholder="Ask anything..."
+            aria-label="Message assistant"
+            rows="2"
+          ></textarea>
+          <div class="composer-actions">
+            <button class="icon-button attach-button" type="button" aria-label="Attach a file">＋</button>
+            <div class="composer-right">
+              <label class="model-select">
+                <span class="model-icon" aria-hidden="true">✳</span>
+                <select aria-label="Choose AI model" [value]="selectedModelId()" (change)="selectModel($event)">
+                  @for (model of models; track model.id) {
+                    <option [value]="model.id">{{ model.title }}</option>
+                  }
+                </select>
+              </label>
+              <button class="icon-button mic-button" type="button" aria-label="Voice input">♩</button>
+              <button class="send-button" type="submit" [disabled]="!prompt().trim()" aria-label="Send message">↑</button>
+            </div>
+          </div>
+        </form>
+        <p class="disclaimer">AI can make mistakes. Check important information.</p>
+      </footer>
+    }
+  </main>
+</div>
