@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { signal, WritableSignal } from '@angular/core';
 import { provideRouter } from '@angular/router';
-import { BehaviorSubject, defer, finalize, Observable, of, Subject } from 'rxjs';
+import { defer, finalize, Observable, of, Subject } from 'rxjs';
 import OpenAI from 'openai';
 import { Dashboard } from './dashboard';
 import { routes } from '../app.routes';
@@ -12,37 +12,57 @@ type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 describe('Dashboard', () => {
   let component: Dashboard;
   let fixture: ComponentFixture<Dashboard>;
-  let chatMessages: BehaviorSubject<ChatMessage[]>;
+  let chatMessages: WritableSignal<ChatMessage[]>;
   let requests: ChatMessage[][];
   let loading: ReturnType<typeof signal<boolean>>;
+  let hasReceivedResponse: ReturnType<typeof signal<boolean>>;
   let response: Observable<string>;
 
   beforeEach(async () => {
-    chatMessages = new BehaviorSubject<ChatMessage[]>([]);
+    chatMessages = signal<ChatMessage[]>([]);
     requests = [];
     loading = signal(false);
+    hasReceivedResponse = signal(false);
     response = of(`Answer ${requests.length + 1}`);
     let pendingRequests = 0;
     const openAIServiceMock = {
-      chatMessages$: chatMessages.asObservable(),
+      chatMessages: chatMessages.asReadonly(),
       isLoading: loading,
-      getChatMessages: () => chatMessages.value,
-      setChatMessages: (messages: ChatMessage[]) => chatMessages.next([...messages]),
-      SendMessageToOpenAI: (messages: ChatMessage[]) => {
-        requests.push(messages);
-        return response;
-      },
-      trackRequest: <T>(request: () => Observable<T>) =>
+      hasReceivedResponse: hasReceivedResponse.asReadonly(),
+      getChatMessages: () => chatMessages(),
+      setChatMessages: (messages: ChatMessage[]) => chatMessages.set([...messages]),
+      sendMessage: (inputMessage: string, messages: ChatMessage[]) => {
+        hasReceivedResponse.set(false);
+        chatMessages.update((currentMessages) => [
+          ...currentMessages,
+          { role: 'user', content: inputMessage },
+        ]);
         defer(() => {
           pendingRequests++;
           loading.set(true);
-          return request().pipe(
+          requests.push(messages);
+          return response.pipe(
             finalize(() => {
               pendingRequests--;
               loading.set(pendingRequests > 0);
             }),
           );
-        }),
+        }).subscribe({
+          next: (chunk) => {
+            hasReceivedResponse.set(true);
+            chatMessages.update((currentMessages) => {
+              const lastMessage = currentMessages.at(-1);
+              if (lastMessage?.role === 'assistant' && typeof lastMessage.content === 'string') {
+                return [
+                  ...currentMessages.slice(0, -1),
+                  { ...lastMessage, content: lastMessage.content + chunk },
+                ];
+              }
+              return [...currentMessages, { role: 'assistant', content: chunk }];
+            });
+          },
+        });
+      },
     };
 
     await TestBed.configureTestingModule({
@@ -64,7 +84,7 @@ describe('Dashboard', () => {
 
   it('should render chat messages when they arrive asynchronously', async () => {
     fixture.autoDetectChanges();
-    chatMessages.next([{ role: 'assistant', content: 'Delayed answer' }]);
+    chatMessages.set([{ role: 'assistant', content: 'Delayed answer' }]);
 
     await fixture.whenStable();
 
@@ -88,7 +108,13 @@ describe('Dashboard', () => {
 
     expect(fixture.nativeElement.querySelector('[aria-label="Assistant is responding"]')).toBeTruthy();
 
-    pendingResponse.next('Hello back');
+    pendingResponse.next('Hello ');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Hello ');
+    expect(fixture.nativeElement.querySelector('[aria-label="Assistant is responding"]')).toBeNull();
+
+    pendingResponse.next('back');
     pendingResponse.complete();
     fixture.detectChanges();
 

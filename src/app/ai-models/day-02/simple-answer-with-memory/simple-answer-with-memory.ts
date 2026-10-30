@@ -18,18 +18,6 @@ export class SimpleAnswerWithMemory {
       ...this.openAIService.getChatMessages(),
       { role: 'user', content: inputMessage },
     ];
-    this.openAIService.setChatMessages(messages);
-
-    this.openAIService
-      .trackRequest(() => this.openAIService.SendMessageToOpenAI(messages))
-      .subscribe({
-        next: (answer) => {
-          this.openAIService.setChatMessages([
-            ...this.openAIService.getChatMessages(),
-            { role: 'assistant', content: answer },
-          ]);
-        },
-        error: (error) => console.error('Ollama request failed:', error),
-      });
+    this.openAIService.sendMessage(inputMessage, messages);
   }
 }

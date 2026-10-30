@@ -15,19 +15,14 @@ describe('OpenAIService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should share updated chat messages with subscribers', () => {
-    const receivedMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[][] = [];
-    const subscription = service.chatMessages$.subscribe((messages) => {
-      receivedMessages.push(messages);
-    });
-
+  it('should expose updated chat messages as a read-only signal', () => {
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'user', content: 'Hello' },
     ];
     service.setChatMessages(messages);
-    subscription.unsubscribe();
 
-    expect(receivedMessages).toEqual([[], messages]);
+    expect(service.chatMessages()).toEqual(messages);
+    expect(service.getChatMessages()).toEqual(messages);
   });
 
   it('should remain loading until all tracked requests finish', () => {

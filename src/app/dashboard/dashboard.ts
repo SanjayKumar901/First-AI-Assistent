@@ -1,11 +1,9 @@
 import { NgComponentOutlet } from '@angular/common';
-import { Component, ElementRef, signal, Type, ViewChild } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, computed, ElementRef, signal, Type, ViewChild } from '@angular/core';
 import { RouterLinkWithHref } from '@angular/router';
 import { SimpleAnswer } from '../ai-models/day-01/simple-answer/simple-answer';
 import { SimpleAnswerWithMemory } from '../ai-models/day-02/simple-answer-with-memory/simple-answer-with-memory';
 import { OpenAIService } from '../open-aiservice';
-import OpenAI from 'openai';
 
 interface AiModelComponent {
   sendMessage(inputMessage: string): void;
@@ -23,8 +21,6 @@ type Message = {
   modelTitle?: string;
 };
 
-type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
-
 @Component({
   imports: [NgComponentOutlet, RouterLinkWithHref],
   selector: 'app-dashboard',
@@ -38,7 +34,17 @@ export class Dashboard {
 
   protected readonly sidebarOpen = signal(true);
   protected readonly prompt = signal('');
-  protected readonly messages = signal<Message[]>([]);
+  protected readonly messages = computed(() => this.openAIService.chatMessages().flatMap((message) => {
+    if (message.role !== 'user' && message.role !== 'assistant') {
+      return [];
+    }
+
+    return [{
+      role: message.role,
+      text: typeof message.content === 'string' ? message.content : '',
+      modelTitle: message.role === 'assistant' ? this.selectedModelTitle() : undefined,
+    }];
+  }));
   protected readonly models: ModelOption[] = [
     { id: 'simple-answer', title: 'Simple Answer', component: SimpleAnswer },
     {
@@ -51,41 +57,30 @@ export class Dashboard {
   protected readonly suggestions = [
     {
       title: 'Untangle a thought',
-      description: 'Get perspective on what’s on your mind',
       prompt: 'Help me untangle this thought: ',
       icon: '⌁',
-      tone: 'sage',
     },
     {
       title: 'Make a fresh start',
-      description: 'Turn a rough idea into a clear plan',
       prompt: 'Help me turn this idea into a clear plan: ',
       icon: '↗',
-      tone: 'peach',
     },
     {
       title: 'Learn something new',
-      description: 'Explore a topic, one step at a time',
       prompt: 'I want to learn about ',
       icon: '◌',
-      tone: 'blue',
     },
     {
       title: 'Create with me',
-      description: 'Brainstorm, write, and make things better',
       prompt: 'Let’s brainstorm ideas for ',
       icon: '✳',
-      tone: 'lilac',
     },
   ];
 
-  constructor(private openAIService: OpenAIService) {
+  constructor(private readonly openAIService: OpenAIService) {
     if (typeof window !== 'undefined') {
       this.sidebarOpen.set(window.innerWidth > 760);
     }
-    this.openAIService.chatMessages$
-      .pipe(takeUntilDestroyed())
-      .subscribe((messages) => this.updateMessages(messages));
   }
 
   protected toggleSidebar(): void {
@@ -110,6 +105,10 @@ export class Dashboard {
 
   protected isLoading(): boolean {
     return this.openAIService.isLoading();
+  }
+
+  protected hasReceivedResponse(): boolean {
+    return this.openAIService.hasReceivedResponse();
   }
 
   protected selectedModelComponent(): Type<AiModelComponent> {
@@ -140,7 +139,7 @@ export class Dashboard {
     event.preventDefault();
     const inputMessage = this.prompt().trim();
 
-    if (!inputMessage) {
+    if (!inputMessage || this.isLoading()) {
       return;
     }
 
@@ -158,18 +157,4 @@ export class Dashboard {
     this.prompt.set('');
   }
 
-  private updateMessages(messages: ChatMessage[]): void {
-    debugger;
-    this.messages.set(messages.flatMap((message) => {
-      if (message.role !== 'user' && message.role !== 'assistant') {
-        return [];
-      }
-
-      return [{
-        role: message.role,
-        text: typeof message.content === 'string' ? message.content : '',
-        modelTitle: message.role === 'assistant' ? this.selectedModelTitle() : undefined,
-      }];
-    }));
-  }
 }
